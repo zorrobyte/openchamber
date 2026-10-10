@@ -1,3 +1,6 @@
+import { readFile } from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import { readOpenCodeCredentials } from '../../opencode/auth.js';
 import {
   getAuthEntry,
@@ -12,6 +15,28 @@ import {
 export const providerId = 'codex';
 export const providerName = 'Codex';
 const aliases = ['openai', 'codex', 'chatgpt'];
+
+// OpenCode 2 turns "Sign in with ChatGPT" into a token-sharing token that
+// /wham/usage rejects with 401. The Codex CLI's own login can still read usage.
+// shortcut: reads the Codex CLI token as-is (no refresh); upgrade if OpenCode exposes a usage-capable token.
+export const readCodexCliToken = async ({ env = process.env, homeDir = os.homedir() } = {}) => {
+  try {
+    const file = path.join(env.CODEX_HOME || path.join(homeDir, '.codex'), 'auth.json');
+    const tokens = JSON.parse(await readFile(file, 'utf8'))?.tokens;
+    return tokens?.access_token ? { accessToken: tokens.access_token, accountId: tokens.account_id } : null;
+  } catch {
+    return null;
+  }
+};
+
+const requestUsage = (accessToken, accountId) => fetch('https://chatgpt.com/backend-api/wham/usage', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {})
+  }
+});
 
 export const isConfigured = (auth) => {
   const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
@@ -35,15 +60,11 @@ export const fetchQuota = async () => {
   }
 
   try {
-    const headers = {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {})
-    };
-    const response = await fetch('https://chatgpt.com/backend-api/wham/usage', {
-      method: 'GET',
-      headers
-    });
+    let response = await requestUsage(accessToken, accountId);
+    if (response.status === 401) {
+      const cli = await readCodexCliToken();
+      if (cli && cli.accessToken !== accessToken) response = await requestUsage(cli.accessToken, cli.accountId);
+    }
 
     if (!response.ok) {
       return buildResult({

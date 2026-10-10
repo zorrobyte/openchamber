@@ -103,3 +103,36 @@ describe('Codex quota windows', () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 });
+
+describe('Codex CLI login fallback', () => {
+  it('retries with the Codex CLI token when the OpenCode token gets 401', async () => {
+    const { mkdtemp, writeFile } = await import('fs/promises');
+    const { tmpdir } = await import('os');
+    const { join } = await import('path');
+    const dir = await mkdtemp(join(tmpdir(), 'codex-home-'));
+    await writeFile(join(dir, 'auth.json'), JSON.stringify({ tokens: { access_token: 'cli-token', account_id: 'acct' } }));
+    vi.stubEnv('CODEX_HOME', dir);
+    const fetchMock = vi.fn(async (_url, init) => init.headers.Authorization === 'Bearer cli-token'
+      ? Response.json({ rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18000 } } })
+      : new Response(null, { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchQuota();
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1].headers['ChatGPT-Account-Id']).toBe('acct');
+    vi.unstubAllEnvs();
+  });
+
+  it('still reports the 401 when there is no Codex CLI login', async () => {
+    vi.stubEnv('CODEX_HOME', '/nonexistent');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 401 })));
+
+    const result = await fetchQuota();
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Session expired — please re-authenticate with OpenAI');
+    vi.unstubAllEnvs();
+  });
+});
