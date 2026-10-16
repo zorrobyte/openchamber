@@ -51,6 +51,7 @@ asked, `/api/quota/providers` answers 500 instead of an empty list.
 | `zhipuai-coding-plan` | Zhipu AI Coding Plan | `providers/zhipuai-coding-plan.js` | `zhipuai-coding-plan`, `zhipuai`, `zhipu`; falls back to `provider.<alias>.options.apiKey` in opencode.json, resolving `{file:...}` (including `~/`) and `{env:...}` with `resolveConfigApiKey` (`utils/auth.js`) |
 | `minimax-coding-plan` | MiniMax Coding Plan (minimax.io) | `providers/minimax-coding-plan.js` / `providers/minimax-shared.js` | `minimax-coding-plan` |
 | `minimax-cn-coding-plan` | MiniMax Coding Plan (minimaxi.com) | `providers/minimax-cn-coding-plan.js` / `providers/minimax-shared.js` | `minimax-cn-coding-plan` |
+| `muse-code` | Muse | `providers/muse.js` | No credential: reads `~/.local/share/opencode/muse-usage.json`, which the opencode-muse-fix OpenCode plugin writes from the `response.subscription_usage` event at the end of each streamed Muse reply (Meta has no usage endpoint) |
 | `ollama-cloud` | Ollama Cloud | `providers/ollama-cloud.js` | `ollama-cloud` / `ollamacloud` API key from OpenCode's credential store |
 | `wafer` | Wafer.ai | `providers/wafer.js` | `wafer`, `wafer-ai`, `wafer_ai`, `wafer.ai` |
 | `opencode-go` | OpenCode Go | `providers/opencode-go.js` | API key on the `opencode-go` integration or, without one, on the shared `opencode` integration; or an OpenCode Console OAuth sign-in on `opencode` |

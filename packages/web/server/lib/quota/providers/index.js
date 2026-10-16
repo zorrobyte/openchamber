@@ -27,6 +27,7 @@ import * as zai from './zai.js';
 import * as zhipuaiCodingPlan from './zhipuai-coding-plan.js';
 import * as minimaxCodingPlan from './minimax-coding-plan.js';
 import * as minimaxCnCodingPlan from './minimax-cn-coding-plan.js';
+import * as muse from './muse.js';
 import * as neuralwatt from './neuralwatt.js';
 import * as kilo from './kilo.js';
 import * as zenmux from './zenmux.js';
@@ -149,6 +150,12 @@ const registry = {
     providerName: minimaxCnCodingPlan.providerName,
     isConfigured: minimaxCnCodingPlan.isConfigured,
     fetchQuota: minimaxCnCodingPlan.fetchQuota
+  },
+  'muse-code': {
+    providerId: muse.providerId,
+    providerName: muse.providerName,
+    isConfigured: muse.isConfigured,
+    fetchQuota: muse.fetchQuota
   },
   'ollama-cloud': {
     providerId: ollamaCloud.providerId,
