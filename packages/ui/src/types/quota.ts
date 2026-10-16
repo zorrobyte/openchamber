@@ -25,7 +25,8 @@ export type QuotaProviderId =
   | 'neuralwatt'
   | 'kilo'
   | 'zenmux'
-  | 'xai';
+  | 'xai'
+  | 'muse-code';
 
 export interface UsageWindowGiftReset {
   recordId: number;
