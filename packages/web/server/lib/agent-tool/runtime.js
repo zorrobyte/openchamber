@@ -76,6 +76,7 @@ const ALL_PARAMETER_PROPERTIES = {
   projectId: { type: 'string', description: 'Configured project ID; do not combine with directory' },
   directory: { type: 'string', description: 'Absolute checkout or session directory; defaults to the current session directory' },
   sessionId: { type: 'string' },
+  children: { type: 'boolean', description: 'For session.stop: stop the running subagent sessions of sessionId instead of sessionId itself' },
   messageId: { type: 'string', description: 'Optional fork boundary message ID' },
   link: {
     type: 'object',

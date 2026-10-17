@@ -172,6 +172,17 @@ other.
   zero is a 503, never a claimed success. Paths outside the workspace are
   allowed on purpose: screenshots and recordings often land in a temp
   directory, and the viewer already reads such files.
+- `session.stop` interrupts `sessionId` through OpenCode's `session.interrupt`,
+  the call behind the Stop button. With `children: true` it lists the
+  session's direct subagent sessions (`session.list` with `parentID`) and
+  interrupts each one that is running, so an agent stops its own subagents by
+  passing its own session id. A session cannot stop itself without
+  `children`, since that would end the turn making the call. Every interrupt
+  settles on its own: the answer lists `stopped`, `alreadyIdle` and `failed`.
+  Subagents of subagents need their own call.
+- `session.send` to a running subagent's session queues the prompt in that
+  session's inbox, and the subagent reads it at its next step. Its reply then
+  becomes the result its parent receives.
 - `usage.get` returns the plan usage the Usage panel shows. `plan-usage.js`
   asks the quota module for the configured providers, fetches each one, and
   turns every top-level and per-model window into a row of `limit`,

@@ -76,6 +76,40 @@ describe('OpenChamber control service', () => {
     }));
   });
 
+  it('session.stop interrupts a running session and reports an idle one without touching it', async () => {
+    const { service, client } = createService();
+    client.session.active.mockResolvedValue({ ses_busy: { type: 'busy' } });
+    client.session.interrupt = vi.fn(async () => ({ interrupted: true }));
+    await expect(service.execute('session.stop', { sessionId: 'ses_busy', directory: '/repo' })).resolves.toMatchObject({
+      stopped: ['ses_busy'],
+      alreadyIdle: [],
+    });
+    await expect(service.execute('session.stop', { sessionId: 'ses_idle', directory: '/repo' })).resolves.toMatchObject({
+      stopped: [],
+      alreadyIdle: ['ses_idle'],
+    });
+    expect(client.session.interrupt).toHaveBeenCalledTimes(1);
+  });
+
+  it('session.stop with children stops each running subagent, and one failure leaves the rest stopped', async () => {
+    const { service, client } = createService();
+    client.session.list.mockResolvedValue({ data: [{ id: 'ses_a' }, { id: 'ses_b' }, { id: 'ses_c' }] });
+    client.session.active.mockResolvedValue({ ses_a: {}, ses_b: {} });
+    client.session.interrupt = vi.fn(async ({ sessionID }) => {
+      if (sessionID === 'ses_b') throw new Error('gone');
+      return { interrupted: true };
+    });
+    const result = await service.execute('session.stop', { sessionId: 'ses_parent', directory: '/repo', children: true }, '/repo', { contextSessionId: 'ses_parent' });
+    expect(client.session.list).toHaveBeenCalledWith(expect.objectContaining({ parentID: 'ses_parent' }));
+    expect(result).toMatchObject({ children: true, stopped: ['ses_a'], alreadyIdle: ['ses_c'], failed: [{ sessionId: 'ses_b', error: 'gone' }] });
+  });
+
+  it('session.stop refuses to stop the calling session itself', async () => {
+    const { service } = createService();
+    await expect(service.execute('session.stop', { sessionId: 'ses_me', directory: '/repo' }, '/repo', { contextSessionId: 'ses_me' }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it('answers usage.get from the plan usage reader, and refuses it when none is wired', async () => {
     const planUsage = vi.fn().mockResolvedValue({ providers: [{ provider: 'Claude', limits: [] }] });
     await expect(createService({ planUsage }).service.execute('usage.get')).resolves.toEqual({

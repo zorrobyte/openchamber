@@ -836,6 +836,41 @@ export const createOpenChamberControlService = (dependencies) => {
         const link = input.link ?? { url: input.url, title: input.title, kind: input.kind, identifier: input.identifier };
         return sessionLinks.link({ sessionId: sessionID, directory, link });
       }
+      if (action === 'session.stop') {
+        const sessionID = asNonEmptyString(input.sessionId);
+        if (!sessionID) throw new OpenChamberControlError('sessionId is required', 400);
+        const stopChildren = input.children === true;
+        // Interrupting the calling session would end the very turn that asked.
+        if (!stopChildren && sessionID === asNonEmptyString(options.contextSessionId)) {
+          throw new OpenChamberControlError('A session cannot stop itself; pass children: true to stop its subagents', 400);
+        }
+        const directory = asNonEmptyString(input.directory)
+          || (await resolveSessionDirectory(sessionID))
+          || asNonEmptyString(contextDirectory);
+        const client = await getClient(directory || '');
+        // shortcut: stops direct subagents only; a subagent's own subagents need their own stop call.
+        const targets = stopChildren
+          ? ((await client.session.list({ parentID: sessionID, directory: directory || undefined, limit: 200 }))?.data ?? [])
+            .map((session) => asNonEmptyString(session?.id))
+            .filter(Boolean)
+          : [sessionID];
+        const active = await activeSessions(client);
+        const running = targets.filter((id) => active[id]);
+        // One failed interrupt must not leave the rest running.
+        const outcomes = await Promise.allSettled(running.map((id) => client.session.interrupt({ sessionID: id })));
+        const stopped = running.filter((_, index) => outcomes[index].status === 'fulfilled' && outcomes[index].value?.interrupted !== false);
+        const failed = running
+          .map((id, index) => ({ id, outcome: outcomes[index] }))
+          .filter(({ outcome }) => outcome.status === 'rejected')
+          .map(({ id, outcome }) => ({ sessionId: id, error: String(outcome.reason?.message ?? outcome.reason) }));
+        return {
+          sessionId: sessionID,
+          children: stopChildren,
+          stopped,
+          alreadyIdle: targets.filter((id) => !active[id]),
+          failed,
+        };
+      }
       if (action === 'session.moveToWorktree') {
         assertSingleScope(input);
         // The calling session by default: the agent moves its own work.
