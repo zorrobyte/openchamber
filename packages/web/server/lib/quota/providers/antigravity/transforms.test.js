@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   parseBucket,
   transformSummary,
-  transformModels,
+  transformPools,
   FIVE_HOUR_WINDOW_SECONDS,
   WEEKLY_WINDOW_SECONDS
 } from './transforms.js';
@@ -52,19 +52,6 @@ const MOCK_SUMMARY_PAYLOAD = {
   ]
 };
 
-const MOCK_MODELS_PAYLOAD = {
-  models: {
-    'gemini-3.8-flash': {
-      displayName: 'Gemini 3.8 Flash',
-      quotaInfo: { remainingFraction: 1.0, resetTime: '2026-10-04T07:31:51Z' }
-    },
-    'claude-sonnet-5-5-low': {
-      displayName: 'Claude Sonnet 5.5 (Low)',
-      quotaInfo: { remainingFraction: 0.46, resetTime: '2026-10-10T10:01:17Z' }
-    }
-  }
-};
-
 describe('Antigravity transforms', () => {
   it('parses buckets into standardized usage windows with 5h and weekly durations', () => {
     const weeklyBucket = parseBucket({
@@ -103,60 +90,18 @@ describe('Antigravity transforms', () => {
     expect(modelGroupWindows[1].groupType).toBe('3p');
   });
 
-  it('binds dual-layer quotas to individual Gemini and Claude models', () => {
-    const { modelGroupWindows } = transformSummary(MOCK_SUMMARY_PAYLOAD);
-    const models = transformModels(MOCK_MODELS_PAYLOAD, modelGroupWindows);
+  it('groups quota into one Gemini entry and one Claude & GPT entry, each with 5h then weekly', () => {
+    const pools = transformPools(MOCK_SUMMARY_PAYLOAD);
 
-    // Gemini gets Gemini group's 5h and weekly
-    const gemini = models['gemini-3.8-flash'];
-    expect(gemini.windows['5h'].remainingPercent).toBe(100);
-    expect(gemini.windows.weekly.remainingPercent).toBe(59);
-
-    // Claude gets 3p group's 5h and weekly
-    const claude = models['claude-sonnet-5-5-low'];
-    expect(claude.windows['5h'].remainingPercent).toBe(80);
-    expect(claude.windows.weekly.remainingPercent).toBe(46);
+    expect(Object.keys(pools)).toEqual(['Gemini', 'Claude & GPT']);
+    expect(Object.keys(pools.Gemini.windows)).toEqual(['5h', 'weekly']);
+    expect(pools.Gemini.windows['5h'].remainingPercent).toBe(100);
+    expect(pools.Gemini.windows.weekly.remainingPercent).toBe(59);
+    expect(pools['Claude & GPT'].windows['5h'].remainingPercent).toBe(80);
+    expect(pools['Claude & GPT'].windows.weekly.remainingPercent).toBe(46);
   });
 
-  it('prioritizes weekly window first when weekly quota is exhausted (bottleneck ordering)', () => {
-    const exhaustedPayload = {
-      groups: [
-        {
-          displayName: 'Claude and GPT models',
-          buckets: [
-            {
-              bucketId: '3p-weekly',
-              window: 'weekly',
-              resetTime: '2026-10-10T10:01:17Z',
-              remainingFraction: 0.0 // Exhausted
-            },
-            {
-              bucketId: '3p-5h',
-              window: '5h',
-              resetTime: '2026-10-04T07:31:51Z',
-              remainingFraction: 1.0
-            }
-          ]
-        }
-      ]
-    };
-
-    const { modelGroupWindows } = transformSummary(exhaustedPayload);
-    const models = transformModels(
-      {
-        models: {
-          'claude-opus-5-5-high': {
-            displayName: 'Claude Opus 5.5',
-            quotaInfo: { remainingFraction: 0.0, resetTime: '2026-10-10T10:01:17Z' }
-          }
-        }
-      },
-      modelGroupWindows
-    );
-
-    const windowEntries = Object.entries(models['claude-opus-5-5-high'].windows);
-    // Weekly should be first entry
-    expect(windowEntries[0][0]).toBe('weekly');
-    expect(windowEntries[0][1].remainingPercent).toBe(0);
+  it('returns no entries when the summary request failed', () => {
+    expect(transformPools(null)).toEqual({});
   });
 });

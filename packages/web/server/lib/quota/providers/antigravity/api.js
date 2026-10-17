@@ -49,33 +49,6 @@ export const refreshAntigravityToken = async (refreshToken) => {
   }
 };
 
-export const fetchAntigravityModels = async (accessToken, projectId) => {
-  const body = projectId ? { project: projectId } : {};
-
-  for (const endpoint of ANTIGRAVITY_ENDPOINTS) {
-    try {
-      const response = await fetch(`${endpoint}/v1internal:fetchAvailableModels`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          ...ANTIGRAVITY_HEADERS
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(15000)
-      });
-
-      if (response.ok) {
-        return await response.json();
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
-};
-
 export const fetchAntigravityQuotaSummary = async (accessToken, projectId) => {
   const body = projectId ? { project: projectId } : {};
 

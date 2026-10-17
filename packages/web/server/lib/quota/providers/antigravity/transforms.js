@@ -6,7 +6,6 @@
  */
 
 import {
-  asNonEmptyString,
   toNumber,
   toTimestamp,
   toUsageWindow
@@ -90,79 +89,16 @@ export const transformSummary = (summaryPayload) => {
   return { modelGroupWindows };
 };
 
-export const transformModels = (modelsPayload, modelGroupWindows = []) => {
-  const rawModels = modelsPayload?.models ?? {};
-  const transformed = {};
-
-  for (const [modelName, modelData] of Object.entries(rawModels)) {
-    const name = asNonEmptyString(modelName);
-    if (!name) continue;
-
-    const lowerName = name.toLowerCase();
-    const is3p = lowerName.includes('claude') || lowerName.includes('gpt');
-    const matchedGroup = modelGroupWindows.find((g) => is3p ? g.groupType === '3p' : g.groupType === 'gemini');
-
-    if (matchedGroup && Object.keys(matchedGroup.windows).length > 0) {
-      const isWeeklyConstrained = matchedGroup.bucketWeekly
-        && (matchedGroup.bucketWeekly.remainingFraction <= 0.001
-          || (matchedGroup.bucket5h && matchedGroup.bucketWeekly.remainingFraction < matchedGroup.bucket5h.remainingFraction));
-
-      const reorderedWindows = {};
-      if (isWeeklyConstrained && matchedGroup.windows.weekly) {
-        reorderedWindows.weekly = matchedGroup.windows.weekly;
-        if (matchedGroup.windows['5h']) {
-          reorderedWindows['5h'] = matchedGroup.windows['5h'];
-        }
-      } else {
-        if (matchedGroup.windows['5h']) {
-          reorderedWindows['5h'] = matchedGroup.windows['5h'];
-        }
-        if (matchedGroup.windows.weekly) {
-          reorderedWindows.weekly = matchedGroup.windows.weekly;
-        }
-      }
-
-      for (const [wLabel, wData] of Object.entries(matchedGroup.windows)) {
-        if (!reorderedWindows[wLabel]) {
-          reorderedWindows[wLabel] = wData;
-        }
-      }
-
-      transformed[name] = { windows: reorderedWindows };
-    } else {
-      // Fallback: if retrieveUserQuotaSummary did not return, fall back to the single-window quotaInfo from fetchAvailableModels
-      const remainingFraction = toNumber(modelData?.quotaInfo?.remainingFraction);
-      const remainingPercent = remainingFraction !== null
-        ? Math.round(remainingFraction * 100)
-        : null;
-      const usedPercent = remainingPercent !== null ? Math.max(0, 100 - remainingPercent) : null;
-      const resetAt = toTimestamp(modelData?.quotaInfo?.resetTime);
-
-      const remainingSeconds = resetAt !== null
-        ? Math.max(0, Math.round((resetAt - Date.now()) / 1000))
-        : null;
-
-      let label = '5h';
-      let seconds = FIVE_HOUR_WINDOW_SECONDS;
-      if (remainingSeconds !== null && remainingSeconds > 36 * 60 * 60) {
-        label = 'weekly';
-        seconds = WEEKLY_WINDOW_SECONDS;
-      } else if (remainingSeconds !== null && remainingSeconds > 10 * 60 * 60) {
-        label = 'daily';
-        seconds = DAILY_WINDOW_SECONDS;
-      }
-
-      transformed[name] = {
-        windows: {
-          [label]: toUsageWindow({
-            usedPercent,
-            windowSeconds: seconds,
-            resetAt
-          })
-        }
-      };
+// Antigravity meters two shared pools, Gemini and Claude + GPT, each with a 5h and a weekly limit.
+// Every model in a pool draws from the same windows, so one entry per pool carries the whole picture.
+export const transformPools = (summaryPayload) => {
+  const pools = {};
+  for (const group of transformSummary(summaryPayload).modelGroupWindows) {
+    const windows = {};
+    for (const label of ['5h', 'weekly', 'daily']) {
+      if (group.windows[label]) windows[label] = group.windows[label];
     }
+    if (Object.keys(windows).length > 0) pools[group.groupType === '3p' ? 'Claude & GPT' : 'Gemini'] = { windows };
   }
-
-  return transformed;
+  return pools;
 };

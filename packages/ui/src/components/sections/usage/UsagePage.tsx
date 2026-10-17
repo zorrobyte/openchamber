@@ -280,14 +280,11 @@ export const UsagePage: React.FC = () => {
                   <CollapsibleContent>
                     <div className="divide-y divide-[var(--surface-subtle)] mt-1">
                       {familyModels.map((model) => {
-                        const entries = Object.entries(model.windows.windows);
-                        if (entries.length === 0) return null;
-                        const [label, window] = entries[0];
                         const isSelected = providerSelectedModels.includes(model.name);
 
-                        return (
+                        return Object.entries(model.windows.windows).map(([label, window]) => (
                           <UsageCard
-                            key={model.name}
+                            key={`${model.name}-${label}`}
                             title={label}
                             subtitle={getDisplayModelName(model.name)}
                             window={window}
@@ -295,7 +292,7 @@ export const UsagePage: React.FC = () => {
                             toggleEnabled={isSelected}
                             onToggle={() => handleModelToggle(model.name)}
                           />
-                        );
+                        ));
                       })}
                     </div>
                   </CollapsibleContent>
@@ -332,14 +329,11 @@ export const UsagePage: React.FC = () => {
                   <CollapsibleContent>
                     <div className="divide-y divide-[var(--surface-subtle)] mt-1">
                       {otherModels.map((model) => {
-                        const entries = Object.entries(model.windows.windows);
-                        if (entries.length === 0) return null;
-                        const [label, window] = entries[0];
                         const isSelected = providerSelectedModels.includes(model.name);
 
-                        return (
+                        return Object.entries(model.windows.windows).map(([label, window]) => (
                           <UsageCard
-                            key={model.name}
+                            key={`${model.name}-${label}`}
                             title={label}
                             subtitle={getDisplayModelName(model.name)}
                             window={window}
@@ -347,7 +341,7 @@ export const UsagePage: React.FC = () => {
                             toggleEnabled={isSelected}
                             onToggle={() => handleModelToggle(model.name)}
                           />
-                        );
+                        ));
                       })}
                     </div>
                   </CollapsibleContent>

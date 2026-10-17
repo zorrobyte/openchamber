@@ -31,7 +31,7 @@ asked, `/api/quota/providers` answers 500 instead of an empty list.
 
 | Provider ID | Display name | Module | Auth aliases/keys |
 | --- | --- | --- | --- |
-| `antigravity` | Antigravity | `providers/antigravity/index.js` | Antigravity accounts file (`~/.config/opencode/antigravity-accounts.json` or the `$OPENCODE_CONFIG_DIR` equivalent) |
+| `antigravity` | Antigravity | `providers/antigravity/index.js` | Antigravity accounts file (`~/.config/opencode/antigravity-accounts.json` or the `$OPENCODE_CONFIG_DIR` equivalent), or the Antigravity CLI (`agy`) on `PATH` or in `~/.local/bin` |
 | `claude` | Claude | `providers/claude/` | Claude Code Keychain entry, Claude Code credentials file, OpenCode `auth.json` (`anthropic`, `claude`), `CLAUDE_CODE_OAUTH_TOKEN` |
 | `cline-pass` | ClinePass | `providers/cline-pass.js` | `cline-pass` (API key under `key` or `token`) |
 | `codex` | Codex | `providers/codex.js` | `openai`, `codex`, `chatgpt` |
@@ -129,11 +129,12 @@ xAI quota reports the SuperGrok billing cycle from `POST https://grok.com/grok_a
 
 ## Antigravity quota and limit semantics
 
-Antigravity reports dual-layer quota for Google Cloud Code / Antigravity IDE accounts, querying Google's `retrieveUserQuotaSummary` endpoint (falling back to `daily-cloudcode-pa.googleapis.com` and `fetchAvailableModels` flat quotaInfo).
+Antigravity meters two shared pools, Gemini models and Claude + GPT models, each with a rolling 5-hour (`5h`) and a 7-day (`weekly`) limit.
 
-- **Windows**: each model row carries its group's rolling 5-hour (`5h`) and 7-day weekly (`weekly`) limits across Gemini and 3P (Claude/GPT) model groups. The provider card itself exposes no top-level windows (`windows: {}`), matching the Google provider: one overview row could only reflect a single group and would mislead a user whose tighter limit lives in the other group.
-- **Bottleneck prioritization**: when a group's weekly limit is exhausted or more constrained than its 5-hour limit, the weekly window is prioritized first in the model's window map.
-- **Runtime parity**: `packages/web/server/lib/quota/providers/antigravity/` and `packages/vscode/src/quotaProviders.ts` (`fetchAntigravityQuota`) implement the same summary parsing, fallback chain, and bottleneck ordering — keep them in sync.
+- **Source**: when the Antigravity CLI is installed, the provider runs `agy --print /usage --output-format json` and reads `command.data.groups`. Google's own client makes that request with its own login, so OpenChamber handles no Google token, and the numbers match what `agy /usage` prints. Without `agy`, the provider falls back to the accounts file and Google's `retrieveUserQuotaSummary` endpoint, trying `daily-cloudcode-pa.googleapis.com` and its sandbox before `cloudcode-pa.googleapis.com`. The daily hosts omit the Gemini group, so that fallback can show only Claude + GPT.
+- **Rows**: `usage.models` has one entry per pool, `Gemini` and `Claude & GPT`, each carrying its `5h` and `weekly` windows in that order. The card exposes no top-level windows (`windows: {}`), because one overview row could only reflect one pool. Usage surfaces render every window of a model entry, so each pool shows two rows.
+- **Failure**: when `agy` exits with an error or prints something other than the expected JSON, or the summary request fails, there are no pools and the provider reports `Failed to fetch Antigravity quota` instead of an empty success.
+- **VS Code**: `packages/vscode/src/quotaProviders.ts` (`fetchAntigravityQuota`) still returns one row per model from `fetchAvailableModels` and does not run `agy`. The two runtimes intentionally differ until that copy is ported.
 
 ## MiniMax M3 / Token Plan migration
 

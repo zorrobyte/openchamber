@@ -41,5 +41,3 @@ export const resolveAntigravityAuth = () => {
 
   return null;
 };
-
-export const isConfigured = () => resolveAntigravityAuth() !== null;
