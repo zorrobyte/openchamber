@@ -156,6 +156,8 @@ import { createSessionMetadataStore, createOpenCodeSessionMetadata } from './lib
 import { createOpenCodeClient } from './lib/openchamber-sessions/opencode-client.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
+import { createPlanUsage } from './lib/openchamber-control/plan-usage.js';
+import { listConfiguredQuotaProviders, fetchQuotaForProvider } from './lib/quota/index.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
@@ -1790,6 +1792,7 @@ const pluginNotificationEmitter = createPluginNotificationEmitter({
 });
 
 const openChamberControlService = createOpenChamberControlService({
+  planUsage: createPlanUsage({ listProviders: listConfiguredQuotaProviders, fetchQuota: fetchQuotaForProvider }),
   readSettingsFromDiskMigrated,
   sanitizeProjects,
   buildOpenCodeUrl,

@@ -82,6 +82,7 @@ describe('agent tool action allowlist', () => {
     'schedule.delete',
     'schedule.toggle',
     'file.open',
+    'usage.get',
   ])('delegates %s to the shared control service', async (action) => {
     const { runtime, executeAction } = await createRuntime();
     const input = { action, projectId: 'project-1' };

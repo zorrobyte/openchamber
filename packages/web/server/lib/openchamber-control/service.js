@@ -229,6 +229,8 @@ export const createOpenChamberControlService = (dependencies) => {
     onPageWaitChange = () => {},
     // Puts a plan in front of the user; answers how many windows it reached.
     showPlan = null,
+    // Reads plan usage per provider for usage.get; absent means the server cannot offer it.
+    planUsage = null,
     // Delivers a dispatched session's result back to the session that asked
     // (`returnResult`); absent means the server cannot offer it.
     dispatchResults = null,
@@ -770,6 +772,10 @@ export const createOpenChamberControlService = (dependencies) => {
       }
       if (action === 'projects.list') return { projects: await projects() };
       if (action === 'models.list') return models();
+      if (action === 'usage.get') {
+        if (!planUsage) throw new OpenChamberControlError('Plan usage is not available on this server', 501);
+        return planUsage();
+      }
       if (action === 'schedule.status') return scheduledTaskService.status();
       if (action.startsWith('schedule.')) {
         const taskID = asNonEmptyString(input.taskId);

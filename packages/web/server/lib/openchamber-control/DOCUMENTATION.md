@@ -172,6 +172,13 @@ other.
   zero is a 503, never a claimed success. Paths outside the workspace are
   allowed on purpose: screenshots and recordings often land in a temp
   directory, and the viewer already reads such files.
+- `usage.get` returns the plan usage the Usage panel shows. `plan-usage.js`
+  asks the quota module for the configured providers, fetches each one, and
+  turns every top-level and per-model window into a row of `limit`,
+  `usedPercent`, `resetsAt` and, for credit balances, `value`. A provider whose
+  fetch fails comes back with its `error` and leaves the others intact.
+  `index.js` wires it to `listConfiguredQuotaProviders` and
+  `fetchQuotaForProvider`; without that wiring the action is a 501.
 - `browser.capture` writes its image on the server, into
   `.openchamber/screenshots/` under the scoped project directory, and returns
   the project-relative path rather than the image bytes. The client that took

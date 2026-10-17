@@ -76,6 +76,14 @@ describe('OpenChamber control service', () => {
     }));
   });
 
+  it('answers usage.get from the plan usage reader, and refuses it when none is wired', async () => {
+    const planUsage = vi.fn().mockResolvedValue({ providers: [{ provider: 'Claude', limits: [] }] });
+    await expect(createService({ planUsage }).service.execute('usage.get')).resolves.toEqual({
+      providers: [{ provider: 'Claude', limits: [] }],
+    });
+    await expect(createService().service.execute('usage.get')).rejects.toMatchObject({ statusCode: 501 });
+  });
+
   it('maps schedule creation into the shared scheduled-task service', async () => {
     const { service, scheduledTaskService } = createService();
     scheduledTaskService.upsert.mockResolvedValue({ task: { id: 'task-1' }, created: true });
