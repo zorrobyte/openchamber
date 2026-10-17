@@ -397,7 +397,17 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
     const { getProfiles, getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
 
-    registerQuotaRoutes(app, { getQuotaProviders });
+    registerQuotaRoutes(app, {
+      getQuotaProviders,
+      // Plugins re-run setup, so a new Claude account's provider appears without restarting chats.
+      reloadOpenCodePlugins: async () => {
+        const response = await fetch(buildOpenCodeUrl('/api/location/reload', ''), {
+          method: 'POST',
+          headers: getOpenCodeAuthHeaders(),
+        });
+        if (!response.ok) throw new Error(`OpenCode reload failed: ${response.status}`);
+      },
+    });
     registerSmallModelRoutes(app, { getSmallModelService });
     registerSessionGoalRoutes(app);
     const gitBinary = resolveGitBinaryForSpawn();

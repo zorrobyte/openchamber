@@ -15,7 +15,8 @@ import type { UsageProviderGroup, UsageLimitRow } from '@/components/usage/usage
  * that do not. Unmatched providers simply produce no headline.
  *
  * `claude-code` is the provider the opencode-claude integration registers, and
- * it bills against the same Claude subscription the `claude` quota reports.
+ * it bills against the same Claude subscription the `claude` quota reports;
+ * `claude-code-2` is the second subscription, reported as `claude-2`.
  * `kilocode` / `kilo-code` are the same Kilo Gateway account as `kilo`.
  */
 const QUOTA_PROVIDER_ALIASES = new Map<string, string>([
@@ -23,6 +24,7 @@ const QUOTA_PROVIDER_ALIASES = new Map<string, string>([
   ['chatgpt', 'codex'],
   ['anthropic', 'claude'],
   ['claude-code', 'claude'],
+  ['claude-code-2', 'claude-2'],
   ['gemini', 'google'],
   ['kilocode', 'kilo'],
   ['kilo-code', 'kilo'],

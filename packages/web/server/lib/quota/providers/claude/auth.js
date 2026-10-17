@@ -15,6 +15,7 @@
  */
 
 import { execFileSync } from 'child_process';
+import { createHash } from 'crypto';
 import os from 'os';
 import path from 'path';
 
@@ -55,11 +56,11 @@ const parseClaudeCodeBlob = (blob, source) => {
   };
 };
 
-const readKeychainCredential = () => {
+const readKeychainCredential = (service = KEYCHAIN_SERVICE) => {
   if (process.platform !== 'darwin') return null;
   let raw;
   try {
-    raw = execFileSync('security', ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-w'], {
+    raw = execFileSync('security', ['find-generic-password', '-s', service, '-w'], {
       encoding: 'utf8',
       timeout: 10_000,
       stdio: ['ignore', 'pipe', 'ignore']
@@ -76,8 +77,24 @@ const readKeychainCredential = () => {
   }
 };
 
-const readCredentialsFile = () =>
-  parseClaudeCodeBlob(readJsonFile(path.join(claudeConfigDirectory(), '.credentials.json')), 'credentials-file');
+const readCredentialsFile = (configDir = claudeConfigDirectory()) =>
+  parseClaudeCodeBlob(readJsonFile(path.join(configDir, '.credentials.json')), 'credentials-file');
+
+/**
+ * Claude Code run with its own CLAUDE_CONFIG_DIR keeps that login under a
+ * Keychain service suffixed with the first 8 hex of sha256(config dir).
+ */
+export const claudeKeychainServiceFor = (configDir) =>
+  `${KEYCHAIN_SERVICE}-${createHash('sha256').update(path.resolve(configDir).normalize('NFC')).digest('hex').slice(0, 8)}`;
+
+/**
+ * Credential of an extra Claude Code account (its own config dir). Never
+ * falls back to the default login, so one account never shows the other's usage.
+ *
+ * @returns {ClaudeCredential|null}
+ */
+export const findClaudeAccountCredential = (configDir) =>
+  readKeychainCredential(claudeKeychainServiceFor(configDir)) ?? readCredentialsFile(path.resolve(configDir));
 
 const readOpenCodeCredential = (auth) => {
   const entry = normalizeAuthEntry(getAuthEntry(auth, OPENCODE_AUTH_ALIASES));

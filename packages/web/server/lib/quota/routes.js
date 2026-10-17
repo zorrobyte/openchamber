@@ -1,4 +1,6 @@
 import express from 'express';
+import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
+import { addSecondClaudeAccount, hasSecondClaudeAccount } from './providers/claude/accounts.js';
 import { deleteManagedCredential, getManagedCredentialStatus, normalizers, readManagedCredential, writeManagedCredential } from './credentials/providers.js';
 import { importCursorCredential, validateCursorCredential } from './providers/cursor.js';
 import { fetchExeDevUsage } from './providers/exe-dev.js';
@@ -30,7 +32,34 @@ const credentialError = (res, error) => res.status(400).json({
   error: error instanceof Error ? error.message : 'Credential validation failed',
 });
 
-export function registerQuotaRoutes(app, { getQuotaProviders }) {
+export function registerQuotaRoutes(app, { getQuotaProviders, reloadOpenCodePlugins }) {
+  app.get('/api/quota/claude-accounts', (_req, res) => {
+    res.json({ second: hasSecondClaudeAccount() });
+  });
+
+  // A new provider: refused in enterprise mode like every other provider entry.
+  app.post('/api/quota/claude-accounts', async (_req, res) => {
+    if (isEnterpriseMode()) {
+      return res.status(403).json({ error: ENTERPRISE_MODE_ERROR, code: 'enterprise_mode' });
+    }
+    let account;
+    try {
+      account = addSecondClaudeAccount();
+    } catch (error) {
+      console.error('Failed to add a Claude account:', error);
+      return res.status(500).json({ error: 'Could not add the Claude account' });
+    }
+    // The account is saved either way; without a reload it appears on OpenCode's next start.
+    let reloaded = true;
+    try {
+      await reloadOpenCodePlugins();
+    } catch (error) {
+      console.warn('OpenCode did not reload after adding a Claude account:', error);
+      reloaded = false;
+    }
+    res.json({ account: { id: account.id, name: account.name }, reloaded });
+  });
+
   app.get('/api/quota/providers', async (_req, res) => {
     try {
       const { listConfiguredQuotaProviders } = await getQuotaProviders();

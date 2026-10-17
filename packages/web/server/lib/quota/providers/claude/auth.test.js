@@ -19,7 +19,7 @@ vi.mock('fs', () => {
 
 vi.mock('../../../opencode/auth.js', () => ({ readOpenCodeCredentials: async () => openCodeAuth() }));
 
-import { findClaudeCredential, loadClaudeCredential } from './auth.js';
+import { claudeKeychainServiceFor, findClaudeAccountCredential, findClaudeCredential, loadClaudeCredential } from './auth.js';
 
 const claudeCodeBlob = (accessToken) => JSON.stringify({
   mcpOAuth: { 'linear|abc': { accessToken: 'unrelated-mcp-token' } },
@@ -126,5 +126,31 @@ describe('Claude credential discovery', () => {
 
     files.clear();
     expect((await withPlatform('linux', loadClaudeCredential)).source).toBe('opencode-auth');
+  });
+});
+
+describe('extra Claude account credential', () => {
+  it('reads the Keychain entry Claude Code keys by config dir', () => {
+    // Claude Code 2.1.302: `Claude Code-credentials-` + sha256(config dir).slice(0, 8).
+    expect(claudeKeychainServiceFor('/Users/me/.claude-2')).toMatch(/^Claude Code-credentials-[0-9a-f]{8}$/);
+    execFileSync.mockImplementation((_cmd, args) => {
+      if (args.includes(claudeKeychainServiceFor('/Users/me/.claude-2'))) return claudeCodeBlob('second-token');
+      return claudeCodeBlob('default-token');
+    });
+
+    const credential = withPlatform('darwin', () => findClaudeAccountCredential('/Users/me/.claude-2'));
+
+    expect(credential.accessToken).toBe('second-token');
+  });
+
+  it('never falls back to the default login or OpenCode', () => {
+    execFileSync.mockImplementation((_cmd, args) => {
+      if (args.includes('Claude Code-credentials')) return claudeCodeBlob('default-token');
+      throw new Error('no keychain entry');
+    });
+    openCodeAuth.mockReturnValue({ anthropic: { access: 'opencode-token' } });
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'env-token';
+
+    expect(withPlatform('darwin', () => findClaudeAccountCredential('/Users/me/.claude-2'))).toBeNull();
   });
 });

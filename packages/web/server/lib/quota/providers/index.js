@@ -43,6 +43,12 @@ const registry = {
     isConfigured: claude.isConfigured,
     fetchQuota: claude.fetchQuota
   },
+  'claude-2': {
+    providerId: claude.secondAccount.providerId,
+    providerName: claude.secondAccount.providerName,
+    isConfigured: claude.secondAccount.isConfigured,
+    fetchQuota: claude.secondAccount.fetchQuota
+  },
   'cline-pass': {
     providerId: clinePass.providerId,
     providerName: clinePass.providerName,

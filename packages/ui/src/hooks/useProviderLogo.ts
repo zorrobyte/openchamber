@@ -31,6 +31,8 @@ const LOGO_ALIAS = new Map<string, string>([
     ['codex', 'openai'],
     ['chatgpt', 'openai'],
     ['claude', 'anthropic'],
+    ['claude-2', 'anthropic'],
+    ['claude-code-2', 'claude-code'],
     ['cline-pass', 'cline'],
     ['gemini', 'google'],
     ['evroc-ai', 'evroc'],

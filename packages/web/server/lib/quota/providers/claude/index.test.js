@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const credential = vi.fn();
+const secondCredential = vi.fn();
 
 vi.mock('./auth.js', () => ({
   findClaudeCredential: () => credential(),
   loadClaudeCredential: async () => credential(),
+  findClaudeAccountCredential: () => secondCredential(),
 }));
 
-import { fetchQuota, isConfigured, resetClaudeQuotaCache } from './index.js';
+import { fetchQuota, isConfigured, resetClaudeQuotaCache, secondAccount } from './index.js';
 
 const CREDENTIAL = {
   accessToken: 'access-a',
@@ -40,7 +42,9 @@ const errorResponse = (status, headers = {}) => ({
 
 beforeEach(() => {
   resetClaudeQuotaCache();
+  secondAccount.resetCache();
   credential.mockReturnValue(CREDENTIAL);
+  secondCredential.mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -144,5 +148,33 @@ describe('Claude quota provider', () => {
     expect(result.ok).toBe(false);
     expect(result.usage).toBeNull();
     expect(result.error).toBe('socket hang up');
+  });
+});
+
+describe('second Claude account quota', () => {
+  it('reads its own login and never the default one', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(PAYLOAD));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const missing = await secondAccount.fetchQuota();
+    expect(missing).toMatchObject({ providerId: 'claude-2', ok: false, configured: false });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    secondCredential.mockReturnValue({ ...CREDENTIAL, accessToken: 'access-2', refreshToken: 'refresh-2' });
+    const result = await secondAccount.fetchQuota();
+    expect(result).toMatchObject({ providerId: 'claude-2', providerName: 'Claude (2)', ok: true });
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer access-2');
+  });
+
+  it('keeps its own rate-limit cooldown', async () => {
+    secondCredential.mockReturnValue({ ...CREDENTIAL, accessToken: 'access-2', refreshToken: 'refresh-2' });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(errorResponse(429))
+      .mockResolvedValueOnce(jsonResponse(PAYLOAD));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect((await fetchQuota()).ok).toBe(false);
+    expect((await secondAccount.fetchQuota()).ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

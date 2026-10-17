@@ -129,7 +129,7 @@ export function getDefaultModels(
   return availableModels.filter((model) => {
     // Anthropic only reports a model here when that model has its own plan
     // limit, so every one it names is worth showing by default.
-    if (providerId === 'claude') return true;
+    if (providerId === 'claude' || providerId === 'claude-2') return true;
     const lower = model.toLowerCase();
     // Handle gemini/ and antigravity/ prefixes
     const modelName = lower.includes('/') ? lower.split('/')[1] : lower;

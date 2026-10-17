@@ -3,6 +3,7 @@ export type QuotaProviderId =
   | 'codex'
   | 'cursor'
   | 'claude'
+  | 'claude-2'
   | 'cline-pass'
   | 'github-copilot'
   | 'github-copilot-addon'

@@ -25,6 +25,7 @@ import { fetchDisabledProviders, setProviderDisabled as setProviderDisabledReque
 import { requiresProviderAuth } from './providerAvailability';
 import { listConnectableProviders } from './connectableProviders';
 import { ProviderConnectPicker } from './ProviderConnectPicker';
+import { ClaudeSubscriptionButton } from './ClaudeSubscriptionButton';
 import {
   providerHasCredentials,
   shouldAutoOpenAuthPanel,
@@ -84,6 +85,8 @@ const connectIntegrationKey = async (request: IntegrationKeyRequest): Promise<vo
 const ADD_PROVIDER_ID = '__add_provider__';
 /** Not an OpenCode provider id: the page for OpenChamber's own classification providers (Jev). */
 const CLASSIFICATION_PAGE_ID = '__classification__';
+/** The opencode-claude plugin's default account; a second subscription is its own provider. */
+const CLAUDE_CODE_PROVIDER_ID = 'claude-code';
 
 interface ProviderSourceInfo {
   exists: boolean;
@@ -837,7 +840,15 @@ export const ProvidersPage: React.FC = () => {
                 {t('settings.providers.disabled.disable')}
               </Button>
             ) : null}
-            {enterpriseLocked ? null : (
+            {enterpriseLocked ? null : selectedProvider.id === CLAUDE_CODE_PROVIDER_ID && providerConnections.length > 0 ? (
+              <ClaudeSubscriptionButton
+                onAdded={(providerId) => {
+                  void loadProviders({ directory: settingsDirectory, source: 'settings:providers', fresh: true });
+                  refreshIntegrations();
+                  setSelectedProvider(providerId);
+                }}
+              />
+            ) : (
             <Button
               variant="outline"
               size="xs"
