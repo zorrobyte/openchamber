@@ -3,6 +3,7 @@ import type {
     TurnActivityRecord,
     TurnPartRecord,
 } from './types';
+import { withAgyProgress } from '../../message/parts/agyProgress';
 
 const getPartEndTime = (part: unknown): number | undefined => {
     const stateEnd = (part as { state?: { time?: { end?: unknown } } }).state?.time?.end;
@@ -59,7 +60,7 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
     let hasReasoning = false;
 
     input.assistantMessages.forEach((message) => {
-        message.parts.forEach((part, partIndex) => {
+        withAgyProgress(message.info, message.parts).forEach((part, partIndex) => {
             let kind: TurnActivityRecord['kind'];
             if (part.type === 'tool') {
                 hasTools = true;

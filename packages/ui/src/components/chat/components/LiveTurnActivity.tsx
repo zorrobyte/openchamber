@@ -15,6 +15,7 @@ import { summarizeLiveActivity } from '../lib/turns/liveActivitySummary';
 import { LiveActivityCollapse } from './LiveActivityCollapse';
 import { LiveFinalActivityContext, LiveTurnHoistedPagesContext } from './liveActivityContext';
 import { ShownPage } from '../message/parts/HtmlRenderFrame';
+import { withAgyProgress } from '../message/parts/agyProgress';
 import { TurnMessageWindow } from './TurnMessageWindow';
 import { useActivityRowGlide } from './useActivityRowGlide';
 import { TurnMessageWindowContext, isReaderAtTimelineEnd, openedFoldMessageWindow } from '../lib/turns/turnMessageWindow';
@@ -48,7 +49,7 @@ export function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, 
     const trimRows = !expanded;
     const trim = React.useMemo(() => (trimRows
         ? planActivityTrim(
-            activityMessages.map((message) => activityRowParts(message.parts, showReasoningTraces).length),
+            activityMessages.map((message) => activityRowParts(withAgyProgress(message.info, message.parts), showReasoningTraces).length),
             LIVE_ACTIVITY_VISIBLE_ROWS,
         )
         : null), [activityMessages, showReasoningTraces, trimRows]);

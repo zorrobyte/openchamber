@@ -1,8 +1,8 @@
-import type { Part, ReasoningPart, ToolInput, ToolPart } from '@/lib/opencode/model';
+import type { Message, Part, ReasoningPart, ToolInput, ToolPart } from '@/lib/opencode/model';
 import { OPENCODE_TOOLS } from '@/lib/opencode/tools';
 
 /** Provider id the Antigravity CLI bridge (opencode-agy) registers. */
-export const AGY_PROVIDER_ID = 'agy';
+const AGY_PROVIDER_ID = 'agy';
 
 // agy runs its tools inside its own loop, so OpenCode never holds tool parts for
 // them. The bridge reports each step as a "▸ <tool> <target>" line in the
@@ -46,3 +46,7 @@ export const splitAgyReasoning = (part: ReasoningPart): Part[] => {
 
 export const expandAgyProgress = (parts: Part[]): Part[] =>
     parts.flatMap((part) => (part.type === 'reasoning' ? splitAgyReasoning(part) : [part]));
+
+/** A message's parts with agy step lines expanded into tool parts; other providers' parts unchanged. */
+export const withAgyProgress = (info: Message, parts: Part[]): Part[] =>
+    info.role === 'assistant' && info.providerID === AGY_PROVIDER_ID ? expandAgyProgress(parts) : parts;

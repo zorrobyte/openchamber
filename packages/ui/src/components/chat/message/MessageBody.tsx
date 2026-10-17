@@ -5,7 +5,6 @@ import UserTextPart from './parts/UserTextPart';
 import ToolPart from './parts/ToolPart';
 import AssistantTextPart from './parts/AssistantTextPart';
 import ReasoningPart from './parts/ReasoningPart';
-import { AGY_PROVIDER_ID, expandAgyProgress } from './parts/agyProgress';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@/lib/opencode/model';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
@@ -1171,9 +1170,8 @@ const AssistantMessageBody = React.memo(({
     const awaitingMessageCompletion = !isMessageCompleted;
 
     const visibleParts = React.useMemo(() => {
-        const shown = parts.filter((part) => !isEmptyTextPart(part));
-        return footerProviderID === AGY_PROVIDER_ID ? expandAgyProgress(shown) : shown;
-    }, [parts, footerProviderID]);
+        return parts.filter((part) => !isEmptyTextPart(part));
+    }, [parts]);
 
     const toolParts = React.useMemo(() => {
         return visibleParts.filter((part): part is ToolPartType => part.type === 'tool');

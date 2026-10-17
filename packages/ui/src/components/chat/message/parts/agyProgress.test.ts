@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Part, ReasoningPart } from '@/lib/opencode/model';
-import { expandAgyProgress, splitAgyReasoning } from './agyProgress';
+import type { AssistantMessage, Part, ReasoningPart } from '@/lib/opencode/model';
+import { projectTurnActivity } from '../../lib/turns/projectTurnActivity';
+import { filterVisibleParts } from '../partUtils';
+import { expandAgyProgress, splitAgyReasoning, withAgyProgress } from './agyProgress';
 
 const reasoning = (text: string): ReasoningPart => ({
     id: 'prt_1',
@@ -41,5 +43,34 @@ describe('agy progress rows', () => {
         const later = splitAgyReasoning(reasoning('▸ view_file /a\n▸ view_file /b'));
         expect(later[0]?.id).toBe(first[0]?.id);
         expect(later.map((part) => part.id)).toEqual(['prt_1-agy-0', 'prt_1-agy-1']);
+    });
+});
+
+const assistant = (providerID: string): AssistantMessage => ({
+    id: 'msg_1',
+    sessionID: 'ses_1',
+    role: 'assistant',
+    time: { created: 1000 },
+    agent: 'general',
+    providerID,
+    modelID: 'gemini-3.8-flash-high',
+});
+
+describe('agy rows with reasoning hidden', () => {
+    const parts: Part[] = [reasoning('▸ view_file /repo/a.cs\nweighing it up'), { id: 'prt_2', sessionID: 'ses_1', messageID: 'msg_1', type: 'text', text: 'AGREE' }];
+
+    test('the rows survive the reasoning filter; the leftover thinking does not', () => {
+        const shown = filterVisibleParts(withAgyProgress(assistant('agy'), parts), { includeReasoning: false });
+        expect(shown.map((part) => part.type)).toEqual(['tool', 'text']);
+    });
+
+    test('other providers keep their reasoning as reasoning', () => {
+        expect(withAgyProgress(assistant('deepseek'), parts)).toBe(parts);
+    });
+
+    test('the turn counts agy steps as tool activity', () => {
+        const activity = projectTurnActivity({ turnId: 't1', assistantMessages: [{ info: assistant('agy'), parts }] });
+        expect(activity.hasTools).toBe(true);
+        expect(activity.activityParts.map((record) => record.kind)).toEqual(['tool', 'reasoning']);
     });
 });

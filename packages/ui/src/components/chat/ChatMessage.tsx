@@ -23,6 +23,7 @@ import type { AgentMentionInfo } from './message/types';
 import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
 import { filterVisibleParts, normalizeParts } from './message/partUtils';
+import { withAgyProgress } from './message/parts/agyProgress';
 import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
 import { isHiddenUserMessage } from './message/hiddenUserMessage';
 import { flattenAssistantTextParts, flattenUserTextParts } from '@/lib/messages/messageText';
@@ -308,10 +309,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const visibleParts = React.useMemo(
         () =>
-            filterVisibleParts(normalizedParts, {
+            // agy steps become tool rows before reasoning is filtered, so they show with reasoning hidden too.
+            filterVisibleParts(withAgyProgress(message.info, normalizedParts), {
                 includeReasoning: showReasoningTraces,
             }),
-        [normalizedParts, showReasoningTraces]
+        [message.info, normalizedParts, showReasoningTraces]
     );
 
     const agentMention = React.useMemo(() => {
