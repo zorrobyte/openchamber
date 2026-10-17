@@ -6,11 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { fetchQuota } from './muse.js';
 
 const now = 1_792_117_000_000;
-const writeUsage = (body) => {
+const writeUsageText = (text) => {
   const file = path.join(mkdtempSync(path.join(os.tmpdir(), 'muse-quota-')), 'muse-usage.json');
-  writeFileSync(file, typeof body === 'string' ? body : JSON.stringify(body));
+  writeFileSync(file, text);
   return file;
 };
+const writeUsage = (body) => writeUsageText(JSON.stringify(body));
 
 describe('Muse quota provider', () => {
   it('maps the saved subscription report to 5h and 7d windows', async () => {
@@ -53,7 +54,7 @@ describe('Muse quota provider', () => {
   });
 
   it('rejects a corrupt usage file', async () => {
-    const result = await fetchQuota({ usageFile: writeUsage('{'), now });
+    const result = await fetchQuota({ usageFile: writeUsageText('{'), now });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Invalid usage file');

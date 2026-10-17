@@ -20,7 +20,7 @@ const aliases = ['openai', 'codex', 'chatgpt'];
 // OpenCode 2 turns "Sign in with ChatGPT" into a token-sharing token that
 // /wham/usage rejects with 401. The Codex CLI's own login can still read usage.
 // shortcut: reads the Codex CLI token as-is (no refresh); upgrade if OpenCode exposes a usage-capable token.
-export const readCodexCliToken = async ({ env = process.env, homeDir = os.homedir() } = {}) => {
+const readCodexCliToken = async ({ env = process.env, homeDir = os.homedir() } = {}) => {
   try {
     const file = path.join(env.CODEX_HOME || path.join(homeDir, '.codex'), 'auth.json');
     const tokens = JSON.parse(await readFile(file, 'utf8'))?.tokens;
