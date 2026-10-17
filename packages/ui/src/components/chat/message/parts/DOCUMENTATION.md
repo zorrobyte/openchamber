@@ -56,6 +56,8 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 
 - `ReasoningPart.tsx`
   - Thinking block UI (`ReasoningTimelineBlock`), summary + optional duration.
+- `agyProgress.ts`
+  - Messages from the `agy` provider (the Antigravity CLI bridge, opencode-agy) carry their tool steps as `▸ <tool> <target>` lines in the reasoning stream, because agy runs its tools itself. `MessageBody` expands those lines into read-only tool parts (`executed: false`, completed, no output) before rendering: `view_file` becomes a `read` row that opens the file, `run_command` a `shell` row, any other agy tool a row under its own name. Text that is not a step line stays one reasoning part after the rows.
 
 - `components/LiveTurnActivity.tsx` (relative to the chat folder)
   - Owns the optional turn disclosure. `MessageList` enables it when Activity
