@@ -14,9 +14,9 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { normalizePath } from '@/lib/pathNormalization';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
-import { formatCost } from './subagentCost';
-import { computeRollup } from './useSubagentCostRollup';
+import { buildChildrenIndex, computeSubtreeCost, formatCost } from './subagentCost';
 import type { State } from '@/sync/types';
+import type { Session } from '@/lib/opencode/model';
 
 type Props = {
   sessionId: string | null;
@@ -42,16 +42,26 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
 
   const liveSessions = useAllLiveSessions();
   const statuses = useAllSessionStatuses();
-  const children = React.useMemo(
-    () => (sessionId ? liveSessions.filter((candidate) => candidate.parentID === sessionId) : []),
-    [liveSessions, sessionId],
-  );
-
-  // Each child's own subtree total (its cost plus every descendant of its
-  // own), so nested subagent-of-subagent cost rolls up under the immediate
-  // child row shown here rather than disappearing. Computed from the list
-  // already held: the hook would open a second live-session subscription.
-  const { perChildCost } = React.useMemo(() => computeRollup(liveSessions, sessionId), [liveSessions, sessionId]);
+  const childrenByParent = React.useMemo(() => buildChildrenIndex(liveSessions), [liveSessions]);
+  // Every descendant, not only direct children: subagents can launch their
+  // own, and a blocker raised that deep is otherwise invisible. Depth drives
+  // the row's indent. Cycle-guarded like computeSubtreeCost.
+  const descendants = React.useMemo(() => {
+    const found: Array<{ session: Session; depth: number }> = [];
+    if (!sessionId) return found;
+    const seen = new Set([sessionId]);
+    const walk = (id: string, depth: number) => {
+      for (const kid of childrenByParent.get(id) ?? []) {
+        if (seen.has(kid.id)) continue;
+        seen.add(kid.id);
+        found.push({ session: kid, depth });
+        walk(kid.id, depth + 1);
+      }
+    };
+    walk(sessionId, 0);
+    return found;
+  }, [childrenByParent, sessionId]);
+  const children = React.useMemo(() => descendants.map((entry) => entry.session), [descendants]);
 
   // One subscription covers every child: per-session hooks would multiply
   // store subscriptions by the number of subagents.
@@ -120,7 +130,8 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
     if (id && observed) observedById.set(id, observed);
   }
   const panelDirectory = normalizePath(directory);
-  const rows = children.map((child) => {
+  const sessionsById = new Map(liveSessions.map((session) => [session.id, session]));
+  const rows = descendants.map(({ session: child, depth }) => {
     const blocked = (permissions[child.id]?.length ?? 0) > 0;
     const asked = (forms[child.id]?.length ?? 0) > 0;
     const status = statuses[child.id]?.type;
@@ -137,13 +148,42 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
     // Blockers first, then running rows, then rows whose status is not known
     // yet, then finished ones: an unknown row must not push a working one down.
     const rank = blocked || asked ? 0 : busy ? 1 : finished ? 3 : 2;
-    return { child, blocked, asked, busy, failed, done, rank };
+    // Each row's cost is its own subtree, so a nested subagent's spend also
+    // rolls up into every row above it.
+    const cost = computeSubtreeCost(child.id, sessionsById, childrenByParent);
+    return { child, depth, blocked, asked, busy, failed, done, rank, cost };
   });
+  type Row = (typeof rows)[number];
+  const rowById = new Map(rows.map((row) => [row.child.id, row]));
+  // A branch sorts by its most urgent row, so a blocked grandchild lifts its
+  // parent instead of hiding under a finished one.
+  const branchRank = new Map<string, number>();
+  const rankOf = (row: Row): number => {
+    const known = branchRank.get(row.child.id);
+    if (known !== undefined) return known;
+    branchRank.set(row.child.id, row.rank);
+    const kids = (childrenByParent.get(row.child.id) ?? []).flatMap((kid) => rowById.get(kid.id) ?? []);
+    const rank = Math.min(row.rank, ...kids.map(rankOf));
+    branchRank.set(row.child.id, rank);
+    return rank;
+  };
   // Newest first by creation within each rank, never by last activity: an
   // activity order reshuffled the rows on every step, moving them under the
-  // pointer. A fully finished list reads exactly as it did at launch.
-  rows.sort((left, right) => (left.rank - right.rank)
-    || ((right.child.time?.created ?? 0) - (left.child.time?.created ?? 0)));
+  // pointer. A fully finished list reads exactly as it did at launch. Each
+  // row's own subagents follow it directly, sorted the same way.
+  const ordered: Row[] = [];
+  const place = (parentId: string) => {
+    const kids = (childrenByParent.get(parentId) ?? [])
+      .flatMap((kid) => rowById.get(kid.id) ?? [])
+      .sort((left, right) => (rankOf(left) - rankOf(right))
+        || ((right.child.time?.created ?? 0) - (left.child.time?.created ?? 0)));
+    for (const kid of kids) {
+      rowById.delete(kid.child.id);
+      ordered.push(kid);
+      place(kid.child.id);
+    }
+  };
+  if (sessionId) place(sessionId);
 
   const busyChildren = rows.filter((row) => row.busy).length;
 
@@ -156,7 +196,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
       summary={busyChildren > 0 ? `${busyChildren}/${children.length}` : children.length}
     >
       <div className="max-h-56 overflow-y-auto">
-        {rows.map(({ child, blocked, asked, busy, failed, done }) => {
+        {ordered.map(({ child, depth, blocked, asked, busy, failed, done, cost: childCost }) => {
           const label = child.title?.trim() || t('chat.workStatus.subagent.untitled');
           let icon: IconName = 'time';
           let iconColor: string | undefined;
@@ -178,7 +218,6 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
             iconColor = 'var(--status-success)';
             statusLabel = t('chat.workStatus.subagent.done');
           }
-          const childCost = perChildCost.get(child.id) ?? 0;
           const modelName = getProviderModelDisplayName(
             providers.find((provider) => provider.id === child.model?.providerID),
             child.model?.id,
@@ -192,7 +231,10 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
               // slot, so it lines up under the section icon and the label
               // starts where every other row's does.
               leading={(
-                <span className="flex size-4 shrink-0 items-center justify-center">
+                <span
+                  className="flex size-4 shrink-0 items-center justify-center"
+                  style={depth > 0 ? { marginInlineStart: depth * 12 } : undefined}
+                >
                   <Icon name={icon} className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />
                 </span>
               )}

@@ -155,6 +155,26 @@ describe('subagent status rows', () => {
     expect(titles()).toEqual(['Older', 'Newer']);
   });
 
+  test('nests a subagent\'s own subagents under it and lifts a blocked branch', async () => {
+    const older: Session = { ...child, id: 'older', title: 'Older', cost: 0.5, time: { created: 2, updated: 2 } };
+    const newer: Session = { ...child, id: 'newer', title: 'Newer', cost: 0, time: { created: 3, updated: 3 } };
+    const grand: Session = { ...child, id: 'grand', parentID: 'older', title: 'Grand', cost: 0.25, time: { created: 4, updated: 4 } };
+    const rows = () => Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label]'))
+      .map((button) => button.parentElement?.textContent);
+    const indent = (index: number) => container.querySelectorAll<HTMLButtonElement>('button[aria-label]')[index]
+      ?.parentElement?.querySelector<HTMLElement>('span[style]')?.style.marginInlineStart;
+    await publish({ session: [parent, older, newer, grand], sessionStatusReady: true });
+    expect(rows()).toEqual(['Newer', 'Older$0.75', 'Grand$0.25']);
+    expect(indent(2)).toBe('12px');
+    expect(container.textContent).toContain('3');
+    await publish({
+      // SAFETY: fixtures carry only the fields the section reads (their presence per session).
+      permission: { grand: [{ id: 'permission', sessionID: 'grand', action: 'bash', resources: ['*'], metadata: {} } as PermissionRequest] },
+    });
+    expect(rows()[0]).toBe('Older$0.75');
+    expect(rows()[1]).toContain('needs permission');
+  });
+
   test('settles a child whose directory differs only in formatting from the panel', async () => {
     await publish({ session: [parent, { ...child, directory: `${directory}/` }], sessionStatusReady: true });
     expect(icon()).toBe('#oc-checkbox-circle');
