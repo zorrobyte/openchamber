@@ -23,6 +23,8 @@ scripts/zorro-install-mac.sh
 
 The script builds the app, signs it ad hoc and copies it into `/Applications`. It needs [bun](https://bun.sh).
 
+On Windows, run `scripts\zorro-install-windows.ps1` instead. It builds an unsigned installer and installs the app for the current user, with a Start menu shortcut. Besides bun it needs Visual Studio 2022 Build Tools with the C++ workload and the Spectre-mitigated libraries (`Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre`), which the node-pty rebuild uses.
+
 ## Upstream
 
 Pull upstream changes with `git fetch upstream && git rebase upstream/main`. For OpenChamber's own docs, see `packages/docs` or the upstream repo.
