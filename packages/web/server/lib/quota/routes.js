@@ -1,6 +1,7 @@
 import express from 'express';
 import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
-import { addSecondClaudeAccount, hasSecondClaudeAccount } from './providers/claude/accounts.js';
+import { readProviderIdentities } from './identities.js';
+import { addSecondClaudeAccount, hasSecondClaudeAccount, listClaudeAccountIds, removeClaudeAccount } from './providers/claude/accounts.js';
 import { deleteManagedCredential, getManagedCredentialStatus, normalizers, readManagedCredential, writeManagedCredential } from './credentials/providers.js';
 import { importCursorCredential, validateCursorCredential } from './providers/cursor.js';
 import { fetchExeDevUsage } from './providers/exe-dev.js';
@@ -33,8 +34,18 @@ const credentialError = (res, error) => res.status(400).json({
 });
 
 export function registerQuotaRoutes(app, { getQuotaProviders, reloadOpenCodePlugins }) {
+  // Which account each provider is signed in as: provider id to email.
+  app.get('/api/quota/account-identities', (_req, res) => {
+    try {
+      res.json({ identities: readProviderIdentities() });
+    } catch (error) {
+      console.warn('Could not read provider account identities:', error instanceof Error ? error.message : error);
+      res.json({ identities: {} });
+    }
+  });
+
   app.get('/api/quota/claude-accounts', (_req, res) => {
-    res.json({ second: hasSecondClaudeAccount() });
+    res.json({ second: hasSecondClaudeAccount(), accounts: listClaudeAccountIds() });
   });
 
   // A new provider: refused in enterprise mode like every other provider entry.
@@ -58,6 +69,26 @@ export function registerQuotaRoutes(app, { getQuotaProviders, reloadOpenCodePlug
       reloaded = false;
     }
     res.json({ account: { id: account.id, name: account.name }, reloaded });
+  });
+
+  // Deleting is explicit: the provider entry always goes, the login data only on request.
+  app.delete('/api/quota/claude-accounts/:id', express.json({ limit: '1kb' }), async (req, res) => {
+    let removed;
+    try {
+      removed = removeClaudeAccount(req.params.id, { deleteLoginData: req.body?.deleteLoginData === true });
+    } catch (error) {
+      if (error?.code === 'NOT_FOUND') return res.status(404).json({ error: 'Unknown Claude account' });
+      console.error('Failed to remove a Claude account:', error);
+      return res.status(500).json({ error: error?.code === 'UNSAFE_DIR' ? error.message : 'Could not remove the Claude account' });
+    }
+    let reloaded = true;
+    try {
+      await reloadOpenCodePlugins();
+    } catch (error) {
+      console.warn('OpenCode did not reload after removing a Claude account:', error);
+      reloaded = false;
+    }
+    res.json({ ...removed, reloaded });
   });
 
   app.get('/api/quota/providers', async (_req, res) => {

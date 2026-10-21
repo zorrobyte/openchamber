@@ -25,6 +25,7 @@ import { useEnterpriseMode, useEnterprisePolicyStore } from '@/stores/useEnterpr
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { openExternalUrl } from '@/lib/url';
+import { useProviderIdentities } from '@/lib/providerIdentities';
 import { SettingsInlineLink } from '@/components/sections/classification/JevAccessNote';
 
 const PROVIDER_POLICIES_DOCS_URL = 'https://opencode.ai/v2/docs/policies/';
@@ -216,6 +217,7 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({ providers, integrati
   const { t } = useI18n();
   const [query, setQuery] = React.useState('');
   const projectIds = useProjectProviderIds(providers, directory);
+  const identities = useProviderIdentities();
   // Alphabetical by name, so a card is found by scanning rather than in the
   // order the providers happened to be configured.
   const alphabetical = React.useMemo(() => [...providers].sort((a, b) =>
@@ -265,6 +267,7 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({ providers, integrati
               key={provider.id}
               icon={<ProviderLogo providerId={provider.id} className="size-5" />}
               title={provider.name || provider.id}
+              subtitle={identities[provider.id]}
               badges={status ? <StatusPill status={status} /> : null}
               footer={(
                 <>

@@ -28,6 +28,8 @@ interface ProviderAccountsProps {
   unusedIds: ReadonlySet<string>;
   /** Credential id with a write in flight; every account action waits for it. */
   busyId: string | null;
+  /** The account (an email) the provider is signed in as, when known. */
+  identity?: string | null;
   onActivate: (account: CredentialConnection) => void;
   onRename: (account: CredentialConnection, label: string) => void;
   onRemove: (account: CredentialConnection) => void;
@@ -120,6 +122,7 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   activeId,
   unusedIds,
   busyId,
+  identity,
   onActivate,
   onRename,
   onRemove,
@@ -184,7 +187,10 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                       </span>
                     ) : null}
                   </div>
-                  <AccountSubtitle connection={connection} fallback={methodLabel} />
+                  <AccountSubtitle
+                    connection={connection}
+                    fallback={identity && connection.method === 'oauth' ? `${identity} · ${methodLabel}` : methodLabel}
+                  />
                 </div>
                 <SignInAgainButton connection={connection} account={connection.label} />
                 {canSwitch && !active && !unused ? (

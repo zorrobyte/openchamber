@@ -71,3 +71,53 @@ export const addSecondClaudeAccount = ({ homeDir = os.homedir(), dataHome = defa
   }
   return account;
 };
+
+/** Ids of the saved extra accounts, for the UI to know which provider pages can delete one. */
+export const listClaudeAccountIds = ({ dataHome = defaultDataHome() } = {}) =>
+  readAccounts(dataHome).map((entry) => entry?.id).filter((id) => typeof id === 'string');
+
+const sameOrInside = (parent, child) => {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+};
+
+/**
+ * Removes an extra account's entry (so its provider goes away) and, only when
+ * asked, its config dir (the login, transcripts and usage). The default
+ * account is never listed here and `~/.claude` is refused as a target, as is
+ * anything that is not a `.claude*` folder directly inside the home directory.
+ * Links inside the dir (the settings shared from the default account) are
+ * unlinked, never followed.
+ */
+export const removeClaudeAccount = (id, { deleteLoginData = false, homeDir = os.homedir(), dataHome = defaultDataHome() } = {}) => {
+  const accounts = readAccounts(dataHome);
+  const entry = accounts.find((candidate) => candidate?.id === id);
+  if (!entry) {
+    const error = new Error('Unknown Claude account');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  let removedLoginData = false;
+  if (deleteLoginData && typeof entry.configDir === 'string' && entry.configDir.trim()) {
+    const dir = path.resolve(entry.configDir);
+    const safe = path.dirname(dir) === path.resolve(homeDir)
+      && path.basename(dir).startsWith('.claude')
+      && !sameOrInside(dir, path.join(homeDir, '.claude'))
+      && !sameOrInside(path.join(homeDir, '.claude'), dir);
+    if (!safe) {
+      const error = new Error('Refusing to delete this folder');
+      error.code = 'UNSAFE_DIR';
+      throw error;
+    }
+    for (const name of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
+      const target = path.join(dir, name);
+      if (fs.lstatSync(target).isSymbolicLink()) fs.unlinkSync(target);
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+    removedLoginData = true;
+  }
+  const file = accountsFile(dataHome);
+  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(accounts.filter((candidate) => candidate !== entry), null, 2)}\n`);
+  fs.renameSync(`${file}.tmp`, file);
+  return { id, removedLoginData };
+};

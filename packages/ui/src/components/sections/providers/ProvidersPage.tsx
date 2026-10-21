@@ -20,6 +20,9 @@ import { formatCompactNumber } from '@/lib/numberFormat';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useProviderIdentities } from '@/lib/providerIdentities';
+import { deleteClaudeAccount, fetchExtraClaudeAccountIds } from '@/lib/claudeAccounts';
+import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { loadIntegrationCatalog, peekIntegrationCatalog, type IntegrationCatalog } from '@/lib/opencode/integration-catalog';
 import { fetchDisabledProviders, setProviderDisabled as setProviderDisabledRequest } from '@/lib/disabledProviders';
 import { requiresProviderAuth } from './providerAvailability';
@@ -152,6 +155,14 @@ export const ProvidersPage: React.FC = () => {
   // startup or from the last visit), then reads it again below.
   const [catalog, setCatalog] = React.useState<IntegrationCatalog | null>(() => peekIntegrationCatalog());
   const [integrationsLoadFailed, setIntegrationsLoadFailed] = React.useState(false);
+  const providerIdentities = useProviderIdentities(selectedProviderId);
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const [extraClaudeIds, setExtraClaudeIds] = React.useState<readonly string[]>([]);
+  React.useEffect(() => {
+    let active = true;
+    void fetchExtraClaudeAccountIds().then((ids) => { if (active) setExtraClaudeIds(ids); });
+    return () => { active = false; };
+  }, [providers.length]);
   const integrations = catalog?.integrations ?? null;
   // Null until read, and where the runtime has no OpenChamber server (VS Code).
   const [disabledProviders, setDisabledProviders] = React.useState<string[] | null>(null);
@@ -554,7 +565,19 @@ export const ProvidersPage: React.FC = () => {
     { failure: t('settings.providers.accounts.toast.renameFailed') },
   );
 
-  const handleRemoveAccount = (account: CredentialConnection) => runAccountAction(
+  const handleRemoveAccount = async (account: CredentialConnection) => {
+    const identity = selectedProviderId ? providerIdentities[selectedProviderId] : undefined;
+    const name = identity ? `${account.label} (${identity})` : account.label;
+    const confirmed = await confirm({
+      title: t('settings.providers.accounts.removeConfirm.title', { account: name }),
+      message: t('settings.providers.accounts.removeConfirm.message', { account: name }),
+      action: t('settings.providers.accounts.remove'),
+      destructive: true,
+    });
+    if (confirmed) await removeAccount(account);
+  };
+
+  const removeAccount = (account: CredentialConnection) => runAccountAction(
     account,
     async () => {
       await opencodeClient.getSdkClient().credential.remove({ credentialID: account.id });
@@ -565,6 +588,36 @@ export const ProvidersPage: React.FC = () => {
       failure: t('settings.providers.accounts.toast.removeFailed'),
     },
   );
+
+  // Deletes an extra Claude subscription. The provider always goes; its login
+  // data is a second, separate question so declining it keeps the sign-in.
+  const handleDeleteClaudeAccount = async (providerId: string, providerName: string) => {
+    const identity = providerIdentities[providerId];
+    const name = identity ? `${providerName} (${identity})` : providerName;
+    if (!await confirm({
+      title: t('settings.providers.claude.deleteConfirm.title', { account: name }),
+      message: t('settings.providers.claude.deleteConfirm.message', { account: name }),
+      action: t('settings.providers.claude.deleteConfirm.action'),
+      destructive: true,
+    })) return;
+    const deleteData = await confirm({
+      title: t('settings.providers.claude.deleteData.title'),
+      message: t('settings.providers.claude.deleteData.message', { account: name }),
+      action: t('settings.providers.claude.deleteData.action'),
+      decline: t('settings.providers.claude.deleteData.keep'),
+      destructive: true,
+    });
+    try {
+      await deleteClaudeAccount(providerId, deleteData);
+      toast.success(t('settings.providers.claude.toast.deleted', { account: name }));
+      setSelectedProvider('');
+      setExtraClaudeIds((ids) => ids.filter((id) => id !== providerId));
+      void loadProviders({ directory: settingsDirectory, source: 'settings:providers', fresh: true });
+    } catch (error) {
+      console.error('[providers] could not delete a Claude subscription:', error);
+      toast.error(t('settings.providers.claude.toast.deleteFailed', { error: error instanceof Error ? error.message : String(error) }));
+    }
+  };
 
   const backToGrid = () => {
     setCandidateProviderId('');
@@ -804,6 +857,7 @@ export const ProvidersPage: React.FC = () => {
       description={providerDescription}
       showSaveStatus={false}
     >
+      {confirmDialog}
       <SettingsSection
         title={t('settings.providers.accounts.title')}
         info={t('settings.providers.accounts.info')}
@@ -838,6 +892,17 @@ export const ProvidersPage: React.FC = () => {
                 onClick={() => void handleProviderDisabled(selectedProvider.id, true)}
               >
                 {t('settings.providers.disabled.disable')}
+              </Button>
+            ) : null}
+            {extraClaudeIds.includes(selectedProvider.id) ? (
+              <Button
+                variant="outline"
+                size="xs"
+                className="!font-normal text-[var(--status-error)]"
+                title={t('settings.providers.claude.deleteHint')}
+                onClick={() => void handleDeleteClaudeAccount(selectedProvider.id, selectedProvider.name || selectedProvider.id)}
+              >
+                {t('settings.providers.claude.delete')}
               </Button>
             ) : null}
             {enterpriseLocked ? null : selectedProvider.id === CLAUDE_CODE_PROVIDER_ID && providerConnections.length > 0 ? (
@@ -882,6 +947,7 @@ export const ProvidersPage: React.FC = () => {
             activeId={activeAccountId}
             unusedIds={unusedAccountIds}
             busyId={accountBusyId}
+            identity={providerIdentities[selectedProvider.id]}
             onActivate={(account) => void handleActivateAccount(account)}
             onRename={(account, label) => void handleRenameAccount(account, label)}
             onRemove={(account) => void handleRemoveAccount(account)}

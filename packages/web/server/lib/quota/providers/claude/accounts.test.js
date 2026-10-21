@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { addSecondClaudeAccount, hasSecondClaudeAccount } from './accounts.js';
+import { addSecondClaudeAccount, hasSecondClaudeAccount, listClaudeAccountIds, removeClaudeAccount } from './accounts.js';
 
 let root;
 let homeDir;
@@ -61,5 +61,34 @@ describe('second Claude account', () => {
     fs.writeFileSync(file, '{not json');
 
     expect(hasSecondClaudeAccount({ dataHome })).toBe(false);
+  });
+});
+
+describe('removing a Claude account', () => {
+  it('drops the entry and keeps the login data unless asked', () => {
+    const account = addSecondClaudeAccount({ homeDir, dataHome });
+    fs.writeFileSync(path.join(account.configDir, '.credentials.json'), '{}');
+    expect(listClaudeAccountIds({ dataHome })).toEqual(['claude-code-2']);
+    expect(removeClaudeAccount('claude-code-2', { homeDir, dataHome })).toEqual({ id: 'claude-code-2', removedLoginData: false });
+    expect(savedAccounts()).toEqual([]);
+    expect(fs.existsSync(path.join(account.configDir, '.credentials.json'))).toBe(true);
+  });
+
+  it('deletes the config dir on request without following links into ~/.claude', () => {
+    const account = addSecondClaudeAccount({ homeDir, dataHome });
+    removeClaudeAccount('claude-code-2', { deleteLoginData: true, homeDir, dataHome });
+    expect(fs.existsSync(account.configDir)).toBe(false);
+    expect(fs.readFileSync(path.join(homeDir, '.claude', 'CLAUDE.md'), 'utf8')).toBe('# rules\n');
+    expect(savedAccounts()).toEqual([]);
+  });
+
+  it('refuses unknown ids and folders that are not an extra .claude dir', () => {
+    expect(() => removeClaudeAccount('claude-code', { homeDir, dataHome })).toThrow('Unknown');
+    for (const configDir of [path.join(homeDir, '.claude'), homeDir, path.join(root, 'elsewhere')]) {
+      fs.mkdirSync(path.join(dataHome, 'opencode-claude'), { recursive: true });
+      fs.writeFileSync(path.join(dataHome, 'opencode-claude', 'accounts.json'), JSON.stringify([{ id: 'claude-code-2', name: 'x', configDir }]));
+      expect(() => removeClaudeAccount('claude-code-2', { deleteLoginData: true, homeDir, dataHome })).toThrow('Refusing');
+      expect(fs.existsSync(path.join(homeDir, '.claude', 'CLAUDE.md'))).toBe(true);
+    }
   });
 });

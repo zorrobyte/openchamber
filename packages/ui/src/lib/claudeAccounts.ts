@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-const statusSchema = z.object({ second: z.boolean() });
+const statusSchema = z.object({ second: z.boolean(), accounts: z.array(z.string()).optional() });
 const addedSchema = z.object({
   account: z.object({ id: z.string().min(1), name: z.string().min(1) }),
   reloaded: z.boolean(),
@@ -30,4 +30,31 @@ export const addSecondClaudeAccount = async (): Promise<z.infer<typeof addedSche
     throw new Error(failure.success ? failure.data.error : `Could not add the Claude subscription (${response.status})`);
   }
   return addedSchema.parse(payload);
+};
+
+/** Provider ids of the extra Claude subscriptions that can be deleted; empty where there is no server. */
+export const fetchExtraClaudeAccountIds = async (): Promise<readonly string[]> => {
+  try {
+    const response = await runtimeFetch('/api/quota/claude-accounts');
+    if (!response.ok) return [];
+    return statusSchema.parse(await response.json()).accounts ?? [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Deletes an extra Claude subscription's provider. The login data (its config
+ * dir) goes only with `deleteLoginData`; the default account is not deletable.
+ */
+export const deleteClaudeAccount = async (id: string, deleteLoginData: boolean): Promise<void> => {
+  const response = await runtimeFetch(`/api/quota/claude-accounts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deleteLoginData }),
+  });
+  if (response.ok) return;
+  const payload: unknown = await response.json().catch(() => null);
+  const failure = errorSchema.safeParse(payload);
+  throw new Error(failure.success ? failure.data.error : `Could not delete the Claude subscription (${response.status})`);
 };
